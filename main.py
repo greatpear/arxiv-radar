@@ -32,7 +32,8 @@ def get_arxiv_paper(query: str, debug: bool = False) -> list[ArxivPaper]:
 
     else:
         logger.debug("Retrieve 5 arxiv papers regardless of the date.")
-        search = arxiv.Search(query='cat:cs.AI', sort_by=arxiv.SortCriterion.SubmittedDate)
+        category_query = ' OR '.join(f'cat:{category.strip()}' for category in query.split('+') if category.strip())
+        search = arxiv.Search(query=category_query, max_results=5, sort_by=arxiv.SortCriterion.SubmittedDate)
         papers = []
         for i in client.results(search):
             papers.append(ArxivPaper(i))
@@ -110,8 +111,6 @@ if __name__ == '__main__':
     )
     parser.add_argument('--debug', action='store_true', help='Debug mode')
     args = parser.parse_args()
-
-    print(args)
 
     assert (
         not args.use_llm_api or args.openai_api_key is not None

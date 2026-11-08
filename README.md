@@ -1,3 +1,5 @@
+> 本仓库的部署配置：每天北京时间 10:00 开始检索语义通信、水声、光及声光融合通信论文，生成中文摘要并发送邮件。参见 [部署说明](DEPLOYMENT.md)。
+
 <p align="center">
   <a href="" rel="noopener">
  <img width="125" height="125" alt="image" src="https://github.com/user-attachments/assets/a1dfc1c6-ab3b-4ca1-a9df-036d7a97bb80" /></a>

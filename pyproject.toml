@@ -11,9 +11,23 @@ dependencies = [
     "pyzotero>=1.5.25",
     "scikit-learn>=1.5.2",
     "sentence-transformers>=3.3.1",
+    "torch>=2.5.0",
     "openai>=1.57.0",
     "gitignore-parser>=0.1.11",
     "tiktoken>=0.8.0",
     "python-dotenv>=1.0.1",
     "feedparser>=6.0.11",
 ]
+
+# Use published CPU wheels on Windows and GitHub's Linux runners.
+[tool.uv.sources]
+llama-cpp-python = [
+    { url = "https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.19/llama_cpp_python-0.3.19-cp311-cp311-win_amd64.whl", marker = "sys_platform == 'win32' and python_version == '3.11'" },
+    { url = "https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.19/llama_cpp_python-0.3.19-cp311-cp311-linux_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.11'" },
+]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
