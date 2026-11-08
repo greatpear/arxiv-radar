@@ -10,6 +10,10 @@ concurrency:
   group: arxiv-radar-daily
   cancel-in-progress: false
 
+env:
+  CMAKE_ARGS: '-DGGML_NATIVE=OFF'
+  CMAKE_BUILD_PARALLEL_LEVEL: '2'
+
 jobs:
   rank_and_send:
     name: Rank & Email

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CMAKE_ARGS: '-DGGML_NATIVE=OFF'
+  CMAKE_BUILD_PARALLEL_LEVEL: '2'
+
 jobs:
   check:
     runs-on: ubuntu-latest
