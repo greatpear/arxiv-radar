@@ -11,6 +11,7 @@ permissions:
 env:
   CMAKE_ARGS: '-DGGML_NATIVE=OFF'
   CMAKE_BUILD_PARALLEL_LEVEL: '2'
+  UV_NO_MANAGED_PYTHON: 'true'
 
 jobs:
   check:
@@ -18,10 +19,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - uses: astral-sh/setup-uv@v7
         with:
           version: '0.8.19'
-          python-version: '3.11'
           enable-cache: true
       - name: Install locked dependencies
         run: uv sync --locked --no-dev

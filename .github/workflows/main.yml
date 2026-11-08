@@ -13,6 +13,7 @@ concurrency:
 env:
   CMAKE_ARGS: '-DGGML_NATIVE=OFF'
   CMAKE_BUILD_PARALLEL_LEVEL: '2'
+  UV_NO_MANAGED_PYTHON: 'true'
 
 jobs:
   rank_and_send:
@@ -40,11 +41,15 @@ jobs:
             echo "No keep-alive.txt file found"
           fi
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
           version: '0.8.19'
-          python-version: '3.11'
           enable-cache: true
 
       - name: Install locked dependencies
