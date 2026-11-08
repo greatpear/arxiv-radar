@@ -3,18 +3,21 @@ import argparse
 import os
 import feedparser
 import sys
+import json
+from pathlib import Path
 from tqdm import tqdm
 from src.paper import ArxivPaper
 from src.rerank import rerank_paper
 from src.llm import destroy_global_llm, set_global_llm
 from src.construct_email import render_email, send_email
 from loguru import logger
+from src.relevance import DEFAULT_TOPIC_QUERY
 
 # 配置日志
 logger.remove()  # 移除默认的日志配置
 logger.add(sys.stdout, level="INFO", format="{time} - {name} - {level} - {message}")
 
-def get_arxiv_paper(query: str, debug: bool = False) -> list[ArxivPaper]:
+def get_arxiv_paper(query: str, debug: bool = False, topic_query: str = None) -> list[ArxivPaper]:
     client = arxiv.Client(num_retries=10, delay_seconds=10)
     feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
     if 'Feed error for query' in feed.feed.title:
@@ -33,6 +36,8 @@ def get_arxiv_paper(query: str, debug: bool = False) -> list[ArxivPaper]:
     else:
         logger.debug("Retrieve 5 arxiv papers regardless of the date.")
         category_query = ' OR '.join(f'cat:{category.strip()}' for category in query.split('+') if category.strip())
+        if topic_query:
+            category_query = f'({category_query}) AND ({topic_query})'
         search = arxiv.Search(query=category_query, max_results=5, sort_by=arxiv.SortCriterion.SubmittedDate)
         papers = []
         for i in client.results(search):
@@ -41,6 +46,54 @@ def get_arxiv_paper(query: str, debug: bool = False) -> list[ArxivPaper]:
                 break
 
     return papers
+
+
+def run_radar(args):
+    if not args.arxiv_query or not args.retriever_target:
+        raise ValueError('ARXIV_QUERY and RETRIEVER_TARGET must be configured')
+    if not 0 < args.min_score <= 100:
+        raise ValueError('MIN_SCORE must be greater than zero and at most 100')
+    if args.max_paper_num != -1 and args.max_paper_num < 1:
+        raise ValueError('MAX_PAPER_NUM must be positive or -1')
+    logger.info('Retrieving communication papers...')
+    candidates = get_arxiv_paper(args.arxiv_query, args.debug, args.topic_query)
+    papers = []
+    if candidates:
+        papers = rerank_paper(candidates, args.retriever_target, min_score=args.min_score)
+        if args.max_paper_num != -1:
+            papers = papers[:args.max_paper_num]
+    destroy_global_llm()
+    interests = [item.strip() for item in args.retriever_target.splitlines() if item.strip()]
+    try:
+        if papers:
+            if args.use_llm_api:
+                set_global_llm(api_key=args.openai_api_key, base_url=args.openai_api_base,
+                               model=args.model_name, lang=args.language)
+            else:
+                set_global_llm(model='Qwen/Qwen2.5-3B-Instruct-GGUF',
+                               model_path='qwen2.5-3b-instruct-q4_k_m.gguf', lang=args.language)
+        html = render_email(papers, interests)
+    finally:
+        destroy_global_llm()
+    report = {
+        'candidate_count': len(candidates), 'minimum_score': args.min_score,
+        'papers': [{'arxiv_id': paper.arxiv_id, 'title': paper.title, 'score': paper.score,
+                    'interest_scores': paper.interest_scores, 'tldr': paper.tldr,
+                    'pdf_url': paper.pdf_url} for paper in papers],
+    }
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding='utf-8')
+    output.with_suffix('.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    logger.info('RADAR_SELECTION=' + json.dumps(report, ensure_ascii=False))
+    if args.dry_run:
+        logger.info(f'Preview saved to {output}; no email sent')
+    elif papers or args.send_empty:
+        send_email(args.sender, args.receiver, args.sender_password, args.smtp_server, args.smtp_port, html)
+        logger.success('Email sent successfully')
+    else:
+        logger.info('No papers met the topic and score requirements; no email sent')
+    return report
 
 
 parser = argparse.ArgumentParser(description='Recommender system for academic papers')
@@ -69,6 +122,8 @@ if __name__ == '__main__':
     add_argument('--send_empty', type=bool, help='If get no arxiv paper, send empty email',default=False)
     add_argument('--max_paper_num', type=int, help='Maximum number of papers to recommend',default=100)
     add_argument('--arxiv_query', type=str, help='Arxiv search query')
+    add_argument('--topic_query', type=str, default=DEFAULT_TOPIC_QUERY, help='Communication topic search expression')
+    add_argument('--min_score', type=float, default=70, help='Minimum relevance score for recommendations')
     add_argument('--smtp_server', type=str, help='SMTP server')
     add_argument('--smtp_port', type=int, help='SMTP port')
     add_argument('--sender', type=str, help='Sender email address')
@@ -110,6 +165,8 @@ if __name__ == '__main__':
         default="English",
     )
     parser.add_argument('--debug', action='store_true', help='Debug mode')
+    parser.add_argument('--dry_run', action='store_true', help='Save a preview without sending email')
+    parser.add_argument('--output', default='output/latest.html', help='HTML preview path; JSON report is saved alongside')
     args = parser.parse_args()
 
     assert (
@@ -123,36 +180,4 @@ if __name__ == '__main__':
         logger.remove()
         logger.add(sys.stdout, level="INFO")
 
-    # logger.info("Retrieving Zotero corpus...")
-    # corpus = get_zotero_corpus(args.zotero_id, args.zotero_key)
-    # logger.info(f"Retrieved {len(corpus)} papers from Zotero.")
-    # if args.zotero_ignore:
-    #     logger.info(f"Ignoring papers in:\n {args.zotero_ignore}...")
-    #     corpus = filter_corpus(corpus, args.zotero_ignore)
-    #     logger.info(f"Remaining {len(corpus)} papers after filtering.")
-    logger.info("Retrieving Arxiv papers...")
-    papers = get_arxiv_paper(args.arxiv_query, args.debug)
-    if len(papers) == 0:
-        logger.info("No new papers found. Yesterday maybe a holiday and no one submit their work :). If this is not the case, please check the ARXIV_QUERY.")
-        if not args.send_empty:
-          exit(0)
-    else:
-        logger.info("Reranking papers...")
-        papers = rerank_paper(papers, args.retriever_target)
-        if args.max_paper_num != -1:
-            papers = papers[:args.max_paper_num]
-
-        destroy_global_llm()
-        if args.use_llm_api:
-            logger.info("Using OpenAI API as global LLM.")
-            set_global_llm(api_key=args.openai_api_key, base_url=args.openai_api_base, model=args.model_name, lang=args.language)
-        else:
-            logger.info("Using Local LLM as global LLM.")
-            set_global_llm(model="Qwen/Qwen2.5-3B-Instruct-GGUF", model_path="qwen2.5-3b-instruct-q4_k_m.gguf", lang=args.language)
-    print(papers)
-    # Prepare interests for render_email
-    interests = [interest.strip() for interest in args.retriever_target.split('\n') if interest.strip()]
-    html = render_email(papers, interests)
-    logger.info("Sending email...")
-    send_email(args.sender, args.receiver, args.sender_password, args.smtp_server, args.smtp_port, html)
-    logger.success("Email sent successfully! If you don't receive the email, please check the configuration and the junk box.")
+    run_radar(args)

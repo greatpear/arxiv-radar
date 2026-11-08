@@ -34,7 +34,7 @@ jobs:
           from urllib.request import Request, urlopen
           import feedparser
           request = Request(
-              'https://rss.arxiv.org/atom/cs.IT+eess.SP+physics.optics+cs.NI',
+              'https://rss.arxiv.org/atom/cs.IT+eess.SP+cs.NI',
               headers={'User-Agent': 'arxiv-radar-deployment-check'},
           )
           with urlopen(request, timeout=30) as response:

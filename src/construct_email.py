@@ -118,7 +118,7 @@ def get_empty_html():
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        No Papers Today. Take a Rest!
+        今日没有符合研究方向且达到相关性门槛的通信论文。
     </td>
   </tr>
   </table>

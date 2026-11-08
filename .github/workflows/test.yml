@@ -2,6 +2,11 @@ name: Test - Daily Paper Sender
 
 on:
   workflow_dispatch:
+    inputs:
+      send_email:
+        description: 'Send the reviewed test selection by email (default saves a preview only)'
+        type: boolean
+        default: false
 
 concurrency:
   group: arxiv-radar-test
@@ -67,11 +72,27 @@ jobs:
           RECEIVER: ${{ secrets.RECEIVER }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
+          MIN_SCORE: ${{ vars.MIN_SCORE }}
+          TOPIC_QUERY: ${{ vars.TOPIC_QUERY }}
           USE_LLM_API: ${{ secrets.USE_LLM_API }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
           MODEL_NAME: ${{ secrets.MODEL_NAME }}
           LANGUAGE: ${{ vars.LANGUAGE }}
           LAST_TIME: ${{ env.LAST_TIME }}
+          SEND_TEST_EMAIL: ${{ inputs.send_email }}
         run: |
-          uv run --locked main.py --debug
+          args=(--debug --output output/preview.html)
+          if [ "$SEND_TEST_EMAIL" != "true" ]; then
+            args+=(--dry_run)
+          fi
+          uv run --locked main.py "${args[@]}"
+
+      - name: Save selection for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-preview
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 7
