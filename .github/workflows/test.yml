@@ -55,10 +55,10 @@ jobs:
           enable-cache: true
 
       - name: Install locked dependencies
-        run: uv sync --locked --no-dev
+        run: uv sync --frozen --no-dev
 
       - name: Verify deployment fixes
-        run: uv run --locked python -m unittest discover -s test -p test_deployment.py -v
+        run: uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
@@ -91,7 +91,7 @@ jobs:
           if [ "$SEND_TEST_EMAIL" != "true" ]; then
             args+=(--dry_run)
           fi
-          uv run --locked main.py "${args[@]}"
+          uv run --frozen main.py "${args[@]}"
 
       - name: Save selection for review
         if: always()

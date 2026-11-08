@@ -27,13 +27,13 @@ jobs:
           version: '0.8.19'
           enable-cache: true
       - name: Install locked dependencies
-        run: uv sync --locked --no-dev
+        run: uv sync --frozen --no-dev
       - name: Run regression checks
-        run: uv run --locked python -m unittest discover -s test -p test_deployment.py -v
+        run: uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
       - name: Check command and configured arXiv feed
         run: |
-          uv run --locked main.py --help
-          uv run --locked python - <<'PY'
+          uv run --frozen main.py --help
+          uv run --frozen python - <<'PY'
           from urllib.request import Request, urlopen
           import feedparser
           request = Request(

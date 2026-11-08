@@ -53,10 +53,10 @@ jobs:
           enable-cache: true
 
       - name: Install locked dependencies
-        run: uv sync --locked --no-dev
+        run: uv sync --frozen --no-dev
 
       - name: Verify deployment fixes
-        run: uv run --locked python -m unittest discover -s test -p test_deployment.py -v
+        run: uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
@@ -84,7 +84,7 @@ jobs:
           LANGUAGE: ${{ vars.LANGUAGE }}
           LAST_TIME: ${{ env.LAST_TIME }}
         run: |
-          uv run --locked main.py
+          uv run --frozen main.py
 
       - name: Update keep-alive file
         run: |
