@@ -11,7 +11,7 @@ from src.rerank import rerank_paper
 from src.llm import destroy_global_llm, set_global_llm
 from src.construct_email import render_email, send_email
 from loguru import logger
-from src.relevance import DEFAULT_TOPIC_QUERY
+from src.relevance import DEFAULT_TOPIC_QUERY, is_target_communication
 
 # 配置日志
 logger.remove()  # 移除默认的日志配置
@@ -24,7 +24,10 @@ def get_arxiv_paper(query: str, debug: bool = False, topic_query: str = None) ->
         raise Exception(f"Invalid ARXIV_QUERY: {query}.")
     if not debug:
         papers = []
-        all_paper_ids = [i.id.removeprefix("oai:arXiv.org:") for i in feed.entries if i.arxiv_announce_type == 'new']
+        new_entries = [item for item in feed.entries if item.arxiv_announce_type == 'new']
+        all_paper_ids = [item.id.removeprefix("oai:arXiv.org:") for item in new_entries
+                         if is_target_communication(item)]
+        logger.info(f'New RSS entries: {len(new_entries)}; visual transmission candidates: {len(all_paper_ids)}')
         bar = tqdm(total=len(all_paper_ids), desc="Retrieving Arxiv papers")
         for i in range(0, len(all_paper_ids),20):
             search = arxiv.Search(id_list=all_paper_ids[i:i+20])

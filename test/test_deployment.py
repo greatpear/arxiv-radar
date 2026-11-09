@@ -22,18 +22,20 @@ def sample_paper(title, summary, score=0):
 COMMUNICATION_PAPERS = [
     ('Deep Joint Source-Channel Coding for Wireless Image Transmission',
      'We design a DeepJSCC encoder and decoder for semantic communication over fading channels.'),
-    ('Adaptive Equalization for Underwater Acoustic Communications',
-     'We evaluate an underwater acoustic communication link using OFDM and bit error rate.'),
-    ('Channel Estimation for Underwater Wireless Optical Communication',
-     'We improve receiver performance and achievable data rate in an underwater optical link.'),
-    ('Hybrid Acoustic-Optical Underwater Communication Networks',
-     'Acoustic and optical links jointly transmit information with reliable modulation and routing.'),
-    ('Coherent Optical Fiber Communication with Learned Receivers',
-     'We reduce the bit error rate of a coherent fiber-optic communication system.'),
-    ('Neural Receivers for Underwater Acoustic OFDM',
-     'We design an OFDM receiver and compare BER for an underwater acoustic link.'),
-    ('Channel Modeling for Underwater Wireless Optical Links',
-     'We model the channel impulse response, scattering and turbulence of an underwater optical link.'),
+    ('Feature Importance-Aware Deep Joint Source-Channel Coding for Computationally Efficient and Adjustable Image Transmission',
+     'FAJSCC uses selective deformable self-attention and independently adjustable encoder and decoder complexity.'),
+    ('MambaJSCC: Adaptive Deep Joint Source-Channel Coding with Generalized State Space Model',
+     'A visual state space model transmits images with CSI adaptation and low computational overhead.'),
+    ('ResiComp: Loss-Resilient Image Compression via Dual-Functional Masked Visual Token Modeling',
+     'A neural image codec jointly optimizes compression efficiency and packet loss concealment using masked visual tokens.'),
+    ('Cross-Modal Semantic Successive Refinement for Generative Image Communication over Underwater Acoustic Channels',
+     'A generative semantic codec reliably reconstructs images over bandwidth-limited underwater acoustic channels.'),
+    ('Adaptive DeepJSCC for Underwater Wireless Optical Image Transmission',
+     'A neural image encoder and decoder jointly adapt to the SNR of underwater optical channels.'),
+    ('Hybrid Acoustic-Optical Underwater Video Transmission with a Learned Erasure-Resilient Codec',
+     'A learned video codec handles packet erasures across hybrid underwater acoustic and optical links.'),
+    ('Improved Nonlinear Transform Source-Channel Coding to Catalyze Semantic Communications',
+     'NTSCC learns semantic latent features and an entropy model for variable-rate JSCC over wireless channels.'),
 ]
 
 IRRELEVANT_PAPERS = [
@@ -47,6 +49,18 @@ IRRELEVANT_PAPERS = [
      'A surrogate model accelerates quantum-noise computations for phase-sensitive amplifiers.'),
     ('Dynamics Aware Past-Future Information Bottleneck',
      'We use block Hankel matrices and Lie groups to realize dynamic systems for estimation and control.'),
+    ('Sensing-Based Communication: A Non-Orthogonal Passive Reflection Framework for ISAC',
+     'An optical retro-reflective system unifies reflective sensing and uplink communication using OOK tags and SIC decoding.'),
+    ('Adaptive Equalization for Underwater Acoustic Communications',
+     'We evaluate an underwater acoustic communication link using OFDM and bit error rate.'),
+    ('Channel Modeling for Underwater Wireless Optical Links',
+     'We model the channel impulse response, scattering and turbulence of an underwater optical link.'),
+    ('LLM-Based Text Semantic Communications',
+     'Language models transmit sentences over noisy wireless channels for text semantic communication.'),
+    ('Mamba for Medical Image Segmentation',
+     'A visual state space network segments medical images with low computational complexity.'),
+    ('High-Performance Learned Image Compression',
+     'A neural image codec improves rate-distortion performance using a Transformer entropy model.'),
 ]
 
 
@@ -174,6 +188,23 @@ class MailTransportTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_daily_feed_filters_before_metadata_requests_and_keeps_resilient_visual_codecs(self):
+        relevant = SimpleNamespace(
+            id='oai:arXiv.org:2502.10812v1', arxiv_announce_type='new',
+            title=COMMUNICATION_PAPERS[3][0], summary=COMMUNICATION_PAPERS[3][1],
+        )
+        unrelated = SimpleNamespace(
+            id='oai:arXiv.org:2611.08809v1', arxiv_announce_type='new',
+            title=IRRELEVANT_PAPERS[5][0], summary=IRRELEVANT_PAPERS[5][1],
+        )
+        client = MagicMock()
+        client.results.return_value = iter([relevant])
+        feed = SimpleNamespace(feed=SimpleNamespace(title='arXiv feed'), entries=[unrelated, relevant])
+        with patch('main.arxiv.Client', return_value=client), patch('main.feedparser.parse', return_value=feed):
+            papers = main.get_arxiv_paper('eess.IV+cs.IT')
+        self.assertEqual(client.results.call_args.args[0].id_list, ['2502.10812v1'])
+        self.assertEqual([paper.title for paper in papers], [COMMUNICATION_PAPERS[3][0]])
+
     def test_debug_search_uses_the_communication_topic_query(self):
         client = MagicMock()
         client.results.return_value = iter(())

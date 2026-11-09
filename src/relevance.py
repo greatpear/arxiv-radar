@@ -1,33 +1,51 @@
-"""Scope this radar to information and communication engineering."""
+"""Scope the radar to learned visual coding and robust semantic transmission."""
 import re
 
 
-DEFAULT_TOPIC_QUERY = ' OR '.join(f'"{phrase}"' for phrase in (
-    'semantic communication', 'semantic communications', 'DeepJSCC',
-    'joint source-channel coding', 'joint source channel coding',
-    'underwater acoustic communication', 'underwater acoustic communications',
-    'underwater optical communication', 'underwater wireless optical communication',
-    'optical wireless communication', 'visible light communication',
-    'free-space optical communication', 'optical fiber communication',
-    'fiber-optic communication', 'acoustic-optical communication',
-    'hybrid acoustic optical',
+DEFAULT_ARXIV_QUERY = 'cs.IT+eess.SP+eess.IV+cs.CV+cs.MM+cs.LG'
+
+DEFAULT_INTERESTS = '\n'.join((
+    'DeepJSCC image/video encoder and decoder architectures, especially FAJSCC and MambaJSCC',
+    'Loss-resilient learned image/video compression, masked visual tokens and packet-loss concealment, as in ResiComp',
+    'Low-complexity, compute-adaptive, SNR/CSI-adaptive and variable-rate visual JSCC',
+    'Generative image/video transmission using diffusion, discrete tokens and semantic refinement',
+    'Semantic or learned robust image/video transmission over underwater acoustic, optical or hybrid acoustic-optical links',
 ))
+
+DEFAULT_TOPIC_QUERY = ' OR '.join(f'"{phrase}"' for phrase in (
+    'ResiComp', 'FAJSCC', 'MambaJSCC', 'DeepJSCC', 'SwinJSCC', 'NTSCC',
+    'joint source-channel coding', 'joint source channel coding',
+    'deep source channel coding',
+)) + ' OR ((image OR video OR visual) AND (' + ' OR '.join(
+    f'"{phrase}"' for phrase in (
+        'semantic communication', 'semantic communications', 'token communication',
+        'loss-resilient image', 'loss-resilient video', 'packet loss concealment',
+        'erasure-resilient codec',
+    )
+) + '))'
 
 
 def is_target_communication(paper):
     text = f'{paper.title}\n{paper.summary}'.casefold()
     text = re.sub(r'[-\u2010-\u2015_/]+', ' ', text)
-    if re.search(r'\bsemantic\s+communications?\b|\bdeep\s*jscc\b|\bjoint\s+source\s+channel\b', text):
+    title = text.split('\n', 1)[0]
+    if re.search(r'\b(?:resicomp|fajscc|mambajscc|swinjscc|ntscc)\b|'
+                 r'\bnonlinear\s+transform\s+source\s+channel\s+coding\b', title):
         return True
-    communication_context = re.search(
-        r'\bcommunications?\b|\btransceivers?\b|\bmodulation\b|\bdemodulation\b|'
-        r'\bequali[sz]ation\b|\bbit\s+error\b|\bspectral\s+efficiency\b|'
-        r'\bchannel\s+(?:estimation|model(?:ing|ling)?|impulse\s+response|capacity)\b|'
-        r'\bdata\s+(?:rate|transmission)\b|\breceivers?\b|\btransmitters?\b|'
-        r'\bofdm\b|\bber\b|\bmimo\b|\bqam\b', text,
-    )
-    if not communication_context:
+    if not re.search(r'\b(?:images?|videos?|visual|multimedia|pictures?)\b', text):
         return False
-    underwater_acoustic = 'underwater' in text and 'acoustic' in text
-    optical_link = re.search(r'\boptical\b|\boptic\b|\bfib(?:er|re)\b|\bvisible\s+light\b', text)
-    return bool(underwater_acoustic or optical_link)
+    semantic_coding = re.search(
+        r'\b[a-z0-9]*jscc\b|\bntscc\b|\bsource\s+channel\s+coding\b|'
+        r'\b(?:semantic|token)\s+(?:communications?|transmission|codecs?)\b|'
+        r'\bsemantic\s+(?:image|video|visual|multimedia)\s+(?:communications?|transmission|coding)\b', text,
+    )
+    if semantic_coding:
+        return True
+    # ResiComp-style codecs can be highly relevant without calling themselves JSCC.
+    learned = re.search(r'\b(?:learned|learning|neural|transformer|generative)\b', text)
+    codec = re.search(r'\b(?:compression|codecs?|coding)\b', text)
+    resilient = re.search(
+        r'\bpacket\s+(?:loss(?:es)?|erasures?)\b|\b(?:loss|erasure|error)\s+resilien\w*\b|'
+        r'\b(?:loss|error)\s+concealment\b', text,
+    )
+    return bool(learned and codec and resilient)

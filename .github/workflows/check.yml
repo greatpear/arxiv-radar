@@ -38,8 +38,9 @@ jobs:
           uv run --frozen python - <<'PY'
           from urllib.request import Request, urlopen
           import feedparser
+          from src.relevance import DEFAULT_ARXIV_QUERY
           request = Request(
-              'https://rss.arxiv.org/atom/cs.IT+eess.SP+cs.NI',
+              f'https://rss.arxiv.org/atom/{DEFAULT_ARXIV_QUERY}',
               headers={'User-Agent': 'arxiv-radar-deployment-check'},
           )
           with urlopen(request, timeout=30) as response:
