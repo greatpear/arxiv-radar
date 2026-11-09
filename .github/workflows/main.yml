@@ -3,8 +3,10 @@ name: Daily Paper Sender
 on:
   workflow_dispatch:
   schedule:
-    # 10:00 Asia/Shanghai (UTC+8).
-    - cron: '0 2 * * *'
+    # Prepare at 09:37 Beijing; send no earlier than 10:00.
+    - cron: '37 1 * * *'
+    # Retry missed/failed runs at 10:07 and 10:27; skip completed days.
+    - cron: '7,27 2 * * *'
 
 concurrency:
   group: arxiv-radar-daily
@@ -16,8 +18,27 @@ env:
   UV_NO_MANAGED_PYTHON: 'true'
 
 jobs:
+  delivery_gate:
+    name: Check today's delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      should_send: ${{ steps.delivery.outputs.should_send }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A queued backup must read the receipt committed by an earlier run.
+          ref: main
+      - name: Check Beijing delivery date
+        id: delivery
+        run: python3 -m src.daily_delivery check
+
   rank_and_send:
     name: Rank & Email
+    needs: delivery_gate
+    if: needs.delivery_gate.outputs.should_send == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     
@@ -27,6 +48,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Parse last run time
         id: parse_last_time
@@ -56,7 +79,9 @@ jobs:
         run: uv sync --frozen --no-dev
 
       - name: Verify deployment fixes
-        run: uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
+        run: |
+          uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
+          uv run --frozen python -m unittest discover -s test -p test_daily_delivery.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
@@ -64,16 +89,11 @@ jobs:
           path: ~/.cache/huggingface
           key: arxiv-radar-models-qwen25-llama32-q4-v1
 
-      - name: Run Script
+      - name: Prepare daily digest
         env:
           SEND_EMPTY: ${{ vars.SEND_EMPTY }}
           RETRIEVER_TARGET: ${{ vars.RETRIEVER_TARGET }}
           ARXIV_QUERY: ${{ secrets.ARXIV_QUERY }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SENDER: ${{ secrets.SENDER }}
-          RECEIVER: ${{ secrets.RECEIVER }}
-          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
           MIN_SCORE: ${{ vars.MIN_SCORE }}
           TOPIC_QUERY: ${{ vars.TOPIC_QUERY }}
@@ -84,7 +104,17 @@ jobs:
           LANGUAGE: ${{ vars.LANGUAGE }}
           LAST_TIME: ${{ env.LAST_TIME }}
         run: |
-          uv run --frozen main.py
+          uv run --frozen main.py --dry_run --output output/daily.html
+
+      - name: Send at or after 10:00 Beijing and save receipt
+        env:
+          SEND_EMPTY: ${{ vars.SEND_EMPTY }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SENDER: ${{ secrets.SENDER }}
+          RECEIVER: ${{ secrets.RECEIVER }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+        run: uv run --frozen python -m src.daily_delivery send
 
       - name: Update keep-alive file
         run: |
@@ -96,10 +126,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/keep-alive.txt
+          git add .github/keep-alive.txt .github/daily-delivery.json
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "chore: update keep-alive timestamp [skip ci]"
             git push
           fi
+
+      - name: Save daily digest for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-digest
+          path: |
+            output/
+            .github/daily-delivery.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

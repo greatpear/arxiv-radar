@@ -1,7 +1,15 @@
 # 论文雷达部署配置
 
-本仓库通过 GitHub Actions 自动运行，每天北京时间 10:00（UTC 02:00）开始执行。
-GitHub 的定时任务可能排队，邮件在检索、评分和摘要生成完成后发出。
+本仓库通过 GitHub Actions 自动运行，目标为每天北京时间 10:00 推送。
+每天 09:37（UTC 01:37）提前检索、评分并生成摘要，准备完成后等到 10:00 再发送。
+10:07 和 10:27（UTC 02:07、02:27）再次检查：当天已完成则跳过，漏触发或失败则补跑。
+GitHub 官方说明定时任务可能延迟，整点高负载时甚至可能丢弃，因此此配置减少漏发，不能保证准点送达。
+若生成摘要在 10:00 后才完成，会立即发送；邮件实际到达时间还取决于邮件服务。
+参见 [GitHub 定时调度说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+
+每天使用北京时间的日期去重。SMTP 接受邮件后才写入 `.github/daily-delivery.json` 并提交，
+发送失败不记为完成，留待补跑。补跑读取主分支最新的发送记录，不重复发送已完成的当日报告。
+发送成功后若记录提交失败，可从运行的 `daily-digest` 附件恢复记录，再补跑，避免重复邮件。
 
 追踪方向：
 
@@ -19,7 +27,7 @@ GitHub Actions Secrets 中；本地 `.env` 不会提交。
 
 ## 管理
 
-- `Actions → Daily Paper Sender`：定时任务，也可手动运行。
+- `Actions → Daily Paper Sender`：定时任务，也可手动补跑；当天已完成时只检查记录，不再次发信。
 - `Actions → Test - Daily Paper Sender`：按通信主题检索最近 5 篇候选论文，执行相同的领域与分数筛选，
   默认只生成预览；在运行结果的 `radar-preview` 中下载 HTML 和 JSON。勾选 `send_email` 才发送测试邮件。
 - `Actions → Deployment Check`：验证 Linux 依赖、回归检查和论文源连接，不发送邮件。
@@ -48,4 +56,5 @@ GitHub Actions Secrets 中；本地 `.env` 不会提交。
 
 ```sh
 uv run --locked python -m unittest discover -s test -p test_deployment.py -v
+uv run --locked python -m unittest discover -s test -p test_daily_delivery.py -v
 ```

@@ -58,7 +58,9 @@ jobs:
         run: uv sync --frozen --no-dev
 
       - name: Verify deployment fixes
-        run: uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
+        run: |
+          uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
+          uv run --frozen python -m unittest discover -s test -p test_daily_delivery.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
