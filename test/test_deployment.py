@@ -36,6 +36,20 @@ COMMUNICATION_PAPERS = [
      'A learned video codec handles packet erasures across hybrid underwater acoustic and optical links.'),
     ('Improved Nonlinear Transform Source-Channel Coding to Catalyze Semantic Communications',
      'NTSCC learns semantic latent features and an entropy model for variable-rate JSCC over wireless channels.'),
+    ('Semantic Communications for Underwater Acoustic Sensor Networks',
+     'A semantic encoder transmits task-relevant sensor measurements over underwater acoustic links.'),
+    ('Semantic Communication over Underwater Optical Channels',
+     'A learned semantic encoder and decoder reliably transmit control messages over an underwater optical channel.'),
+    ('Semantic Communications in Hybrid Acoustic-Optical Networks',
+     'We transmit task-relevant semantic messages using hybrid underwater acoustic and optical links.'),
+    ('Task-Oriented Semantic Communications for Satellite Telemetry',
+     'A learned semantic encoder transmits satellite sensor information to support receiver inference.'),
+    ('LLM-Based Text Semantic Communications',
+     'Language models transmit sentences over noisy terrestrial wireless channels for text semantic communication.'),
+    ('Design of a Speech Enhancement-Based Deep Semantic Autoencoder for Wireless Communications',
+     'A deep semantic autoencoder encodes speech features for robust wireless transmission.'),
+    ('Deep Joint Source-Channel Coding for Speech Transmission',
+     'A neural JSCC encoder transmits speech over noisy wireless channels.'),
 ]
 
 IRRELEVANT_PAPERS = [
@@ -55,12 +69,12 @@ IRRELEVANT_PAPERS = [
      'We evaluate an underwater acoustic communication link using OFDM and bit error rate.'),
     ('Channel Modeling for Underwater Wireless Optical Links',
      'We model the channel impulse response, scattering and turbulence of an underwater optical link.'),
-    ('LLM-Based Text Semantic Communications',
-     'Language models transmit sentences over noisy wireless channels for text semantic communication.'),
     ('Mamba for Medical Image Segmentation',
      'A visual state space network segments medical images with low computational complexity.'),
     ('High-Performance Learned Image Compression',
      'A neural image codec improves rate-distortion performance using a Transformer entropy model.'),
+    ('Classical Joint Source-Channel Coding for Gaussian Sources',
+     'We prove information-theoretic coding bounds for Gaussian sources over memoryless channels.'),
 ]
 
 

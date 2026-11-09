@@ -60,10 +60,19 @@ def calculate_paper_score(paper: ArxivPaper, interests: List[str]) -> float:
     relevant_example = dict(zero_example)
     relevant_example['T1'] = 94
     prompt = f'''Evaluate this paper for an INFORMATION AND COMMUNICATION ENGINEERING researcher
-focused on LEARNED IMAGE/VIDEO CODING AND ROBUST SEMANTIC TRANSMISSION.
+focused on SEMANTIC COMMUNICATION AS A METHOD, WITH APPLICATION SCENARIOS UNRESTRICTED.
 The user's exemplars are ResiComp (loss-resilient learned image compression),
 FAJSCC (compute-efficient and adjustable image DeepJSCC), and MambaJSCC
 (state-space visual JSCC with channel adaptation).
+These are METHOD references, not restrictions to visual data or particular channels.
+The required criterion is proposing, improving, or applying semantic communication,
+deep JSCC, or closely related ResiComp-style loss-resilient learned communication coding.
+Any modality can qualify: images, video, speech, text, sensor measurements, or multimodal data.
+Any scenario can qualify: underwater acoustic, optical, hybrid acoustic-optical,
+terrestrial wireless, satellite, edge/cloud, or other communication environments.
+Underwater is an application interest, NOT a prerequisite.
+Task-oriented feature selection and coding for receiver classification/inference
+are relevant methods, even when image reconstruction is not their objective.
 Topics (IDs must stay unchanged): {json.dumps(topics)}
 
 Score each topic from 0 to 100 based on the main technical contribution:
@@ -75,10 +84,11 @@ Optical materials, photon emitters, quantum gauge fields, boson sampling, imagin
 and generic information-bottleneck theory must score 0 unless the paper evaluates
 an actual data-bearing communication system in one of the listed topics.
 The word "optical", "acoustic", "semantic" or "information" alone does not establish relevance.
-Ordinary optical links, ISAC sensing, underwater channel estimation, text/speech-only
-semantic communication, and unrelated uses of Mamba/Transformers must score 0.
-Underwater/optical work qualifies only when its main contribution is semantic/JSCC
-or learned loss-resilient image/video transmission. Merely citing the exemplars is insufficient.
+Ordinary optical links, ISAC sensing, underwater equalization/channel estimation,
+and unrelated uses of Mamba/Transformers must score 0 unless semantic communication
+or learned communication coding is a substantive part of the contribution.
+Do not give a paper a high score solely for its physical carrier, environment,
+or for citing the exemplars. Evaluate the actual communication method.
 
 For example, a paper that directly solves only topic T1: {json.dumps(relevant_example)}
 Unrelated material-emission or quantum-physics paper: {json.dumps(zero_example)}
