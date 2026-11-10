@@ -7,6 +7,8 @@ on:
     - cron: '37 1 * * *'
     # Retry missed/failed runs at 10:07 and 10:27; skip completed days.
     - cron: '7,27 2 * * *'
+    # Keep checking at 11:11-22:11 Beijing if all morning triggers were missed.
+    - cron: '11 3-14 * * *'
 
 concurrency:
   group: arxiv-radar-daily
