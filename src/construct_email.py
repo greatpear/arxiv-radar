@@ -7,6 +7,7 @@ from email.utils import parseaddr, formataddr
 import smtplib
 import datetime
 import time
+from html import escape
 from loguru import logger
 
 framework = """
@@ -54,7 +55,7 @@ To unsubscribe, remove your email in your Github Action setting.
 function adjustInterestTags() {
   // 遍历所有论文区块
   document.querySelectorAll('.paper-block').forEach(block => {
-    const relevanceRow = block.querySelector('tr:nth-child(3) td');
+        const relevanceRow = block.querySelector('.relevance-row');
     if (!relevanceRow) return;
     
     const interestTags = relevanceRow.querySelectorAll('.interest-tag');
@@ -118,14 +119,14 @@ def get_empty_html():
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        今日没有符合研究方向且达到相关性门槛的通信论文。
+        本次检索没有发现同时符合研究方向和已核实刊会级别要求的论文。
     </td>
   </tr>
   </table>
   """
   return block_template
 
-def get_block_html(title:str, authors:str, rate:str, score:float,arxiv_id:str, abstract:str, pdf_url:str, code_url:str=None, affiliations:str=None, high_score_interests:list=None):
+def get_block_html(title:str, authors:str, rate:str, score:float,arxiv_id:str, abstract:str, pdf_url:str, code_url:str=None, affiliations:str=None, high_score_interests:list=None, publication:dict=None):
     code = f'<a href="{code_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #5bc0de; padding: 8px 16px; border-radius: 4px; margin-left: 8px;">Code</a>' if code_url else ''
     
     # 导入截断函数
@@ -139,6 +140,14 @@ def get_block_html(title:str, authors:str, rate:str, score:float,arxiv_id:str, a
             truncated_interest = truncate_interest(interest)
             interest_tags += f'<span class="interest-tag" data-full-interest="{interest}" title="{interest}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 3px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; line-height: 1; box-sizing: border-box;">{truncated_interest}</span>'
     
+    publication = publication or {}
+    venue = escape(publication.get('name', ''))
+    rank = escape(publication.get('rank', ''))
+    version = escape(publication.get('rank_version', ''))
+    doi_url = escape(publication.get('doi_url', ''), quote=True)
+    source_url = escape(publication.get('rank_source', ''), quote=True)
+    source_label = '会议官网' if publication.get('rank') == '顶级会议' else '分区来源'
+    publication_html = f'<strong>发表刊会：</strong> <a href="{doi_url}">{venue}</a>；{rank}（{version}，<a href="{source_url}">{source_label}</a>）' if venue else ''
     block_template = f"""
     <div class="paper-block">
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
@@ -155,7 +164,10 @@ def get_block_html(title:str, authors:str, rate:str, score:float,arxiv_id:str, a
         </td>
     </tr>
     <tr>
-        <td style="font-size: 14px; color: #333; padding: 8px 0;">
+        <td style="font-size: 14px; color: #333; padding: 8px 0;">{publication_html}</td>
+    </tr>
+    <tr>
+        <td class="relevance-row" style="font-size: 14px; color: #333; padding: 8px 0;">
             <strong>Relevance:</strong> {rate} <span style="font-size: 12px; color: #888;">({score:.0f}/100)</span>{interest_tags}
         </td>
     </tr>
@@ -223,7 +235,7 @@ def render_email(papers:list[ArxivPaper], interests:list[str]=None):
         else:
             affiliations = 'Unknown Affiliation'
         
-        parts.append(get_block_html(p.title, authors, rate, p.score, p.arxiv_id, p.tldr, p.pdf_url, p.code_url, affiliations, p.high_score_interests))
+        parts.append(get_block_html(p.title, authors, rate, p.score, p.arxiv_id, p.tldr, p.pdf_url, p.code_url, affiliations, p.high_score_interests, getattr(p, 'publication', None)))
         time.sleep(10)
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'

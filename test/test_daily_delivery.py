@@ -33,6 +33,8 @@ class DailyDeliveryTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.root = Path(self.folder.name)
         self.receipt = self.root / 'delivery.json'
+        self.ledger = self.root / 'recommended.json'
+        self.pending = self.root / 'pending.json'
         self.html = self.root / 'daily.html'
         self.html.write_text('<p>通信论文日报</p>', encoding='utf-8')
         self.html.with_suffix('.json').write_text(json.dumps({
@@ -51,6 +53,7 @@ class DailyDeliveryTests(unittest.TestCase):
             self.messages.append((self.clock.value, args))
         return self.delivery.deliver_digest(
             self.html, self.receipt, settings=self.settings,
+            ledger_path=self.ledger, pending_path=self.pending,
             clock=self.clock.now, sleeper=self.clock.sleep,
             transport=transport or capture,
         )
@@ -74,14 +77,40 @@ class DailyDeliveryTests(unittest.TestCase):
         self.assertFalse(self.deliver())
         self.assertEqual(len(self.messages), 1)
 
+    def test_successful_send_records_recommended_ids_for_future_days(self):
+        import inspect
+        self.assertIn('ledger_path', inspect.signature(self.delivery.deliver_digest).parameters,
+                      'Sent-paper ledger is missing')
+        self.deliver()
+        self.assertEqual(json.loads(self.ledger.read_text(encoding='utf-8'))['arxiv_ids'], ['2611.08809'])
+
     def test_failed_smtp_send_remains_eligible_for_a_backup(self):
         def failure(*args):
             raise OSError('SMTP unavailable')
         with self.assertRaisesRegex(OSError, 'SMTP unavailable'):
             self.deliver(transport=failure)
         self.assertFalse(self.receipt.exists())
+        self.assertFalse(self.ledger.exists())
+        self.assertFalse(self.pending.exists())
         self.assertTrue(self.delivery.needs_delivery(self.receipt, self.clock.now()))
         self.assertTrue(self.deliver())
+
+    def test_successful_send_saves_preprints_for_future_publication_checks(self):
+        report = json.loads(self.html.with_suffix('.json').read_text(encoding='utf-8'))
+        report['pending_publications'] = {
+            '2610.00001': {'first_seen': '2026-11-10', 'last_checked': '2026-11-10'}}
+        self.html.with_suffix('.json').write_text(json.dumps(report), encoding='utf-8')
+        self.deliver()
+        self.assertEqual(json.loads(self.pending.read_text(encoding='utf-8'))['papers'],
+                         report['pending_publications'])
+
+    def test_skipped_empty_notice_also_saves_pending_preprints(self):
+        pending = {'2610.00001': {'first_seen': '2026-11-10', 'last_checked': '2026-11-10'}}
+        self.html.with_suffix('.json').write_text(
+            json.dumps({'papers': [], 'pending_publications': pending}), encoding='utf-8')
+        self.settings['SEND_EMPTY'] = 'false'
+        self.assertFalse(self.deliver())
+        self.assertEqual(json.loads(self.pending.read_text(encoding='utf-8'))['papers'], pending)
 
     def test_beijing_calendar_day_controls_duplicate_detection(self):
         self.receipt.write_text('{"date":"2026-11-09","status":"sent"}', encoding='utf-8')

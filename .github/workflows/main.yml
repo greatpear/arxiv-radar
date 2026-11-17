@@ -84,6 +84,8 @@ jobs:
         run: |
           uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
           uv run --frozen python -m unittest discover -s test -p test_daily_delivery.py -v
+          uv run --frozen python -m unittest discover -s test -p test_venue_filter.py -v
+          uv run --frozen python -m unittest discover -s test -p test_pending_publications.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
@@ -94,11 +96,9 @@ jobs:
       - name: Prepare daily digest
         env:
           SEND_EMPTY: ${{ vars.SEND_EMPTY }}
-          RETRIEVER_TARGET: ${{ vars.RETRIEVER_TARGET }}
           ARXIV_QUERY: ${{ secrets.ARXIV_QUERY }}
           MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
           MIN_SCORE: ${{ vars.MIN_SCORE }}
-          TOPIC_QUERY: ${{ vars.TOPIC_QUERY }}
           USE_LLM_API: ${{ secrets.USE_LLM_API }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
@@ -128,7 +128,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/keep-alive.txt .github/daily-delivery.json
+          git add .github/keep-alive.txt .github/daily-delivery.json .github/recommended-papers.json .github/pending-publications.json
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
@@ -144,6 +144,8 @@ jobs:
           path: |
             output/
             .github/daily-delivery.json
+            .github/recommended-papers.json
+            .github/pending-publications.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

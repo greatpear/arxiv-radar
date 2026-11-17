@@ -12,18 +12,28 @@ GitHub 官方说明定时任务可能延迟，整点高负载时甚至可能丢�
 发送失败不记为完成，留待补跑。补跑读取主分支最新的发送记录，不重复发送已完成的当日报告。
 发送成功后若记录提交失败，可从运行的 `daily-digest` 附件恢复记录，再补跑，避免重复邮件。
 
-筛选原则：以语义通信为方法主线，应用场景开放。水声、光、声光融合和其他通信环境均可，
-图像、视频、语音、文本、传感数据等信源均可；不把某一种信道、场景或模态设为必要条件。
+筛选原则：以空间信息辅助图像 JSCC 与重建为主线。水声、光、声光融合和其他通信环境均可。
 ResiComp、FAJSCC、MambaJSCC 是方法参照，其中 ResiComp 类学习式抗丢包编解码也作为相关工作保留。
 
 追踪方向：
 
-- 语义通信与 DeepJSCC 编码器、解码器、语义表示和端到端传输方法。
-- 任务型语义编码、特征选择、重建或接收端分类/推理，以及多模态语义传输。
-- 抗丢包学习式编码、掩码 token、潜变量修复与丢包隐藏。
-- 低复杂度与计算量可调、SNR/CSI 自适应、可变码率传输。
-- 扩散模型、离散 token 与生成式语义传输。
-- 上述方法在水下声学、光、声光混合、常规无线、卫星等场景中的应用。
+- 图像/视频 DeepJSCC、语义传输与重建。
+- 二维空间距离、单目相对深度、几何注意力和视觉空间关系。
+- 空间结构、边缘、拓扑、感兴趣区域和语义特征重要性。
+- 信道/SNR 自适应、可变码率，以及 Transformer 和 Mamba 视觉骨架。
+- 抗丢包学习式视觉编码、掩码 token、潜变量修复与丢包隐藏。
+- 与空间几何注意力直接相关、可迁移到重建的视觉方法作为辅助。
+
+发表级别采用严格白名单：Crossref 题名及第一作者匹配，DOI 指向正式期刊论文或会议主会论文；
+期刊以可核验的中科院大类一区、二区为准，当前采用 LetPub 展示的 **2025 年 3 月升级版**，每篇提供来源链接。
+会议采用 CVPR、ICCV、NeurIPS、ICML、ICLR、ACM MM 等主会，排除工作坊。
+未核实、预印本、无 DOI、白名单外或匹配不确定的论文不会推送。白名单不覆盖全部合格刊会，
+每年分区更新后应核验并更新 `src/publication.py`。Crossref 查询失败时任务失败并等待重试，不将错误伪装成没有论文。
+目前以 arXiv 当日 RSS 新条目和更新版本作为候选，并将尚未核实合格发表的相关论文加入待查队列。
+队列按上次检查时间从早到晚每天最多复查 20 篇，首次发现后保留两年；即使论文没有更新 arXiv，
+也会尝试通过 Crossref 发现其正式发表记录。队列从部署后开始积累，不包含部署前全部历史论文。
+已经发送的 arXiv 论文通过 `.github/recommended-papers.json` 跨日期去重。
+合格结果可能很少，空邮件不代表该方向没有高水平论文。
 
 检索分类为 `cs.IT+eess.SP+eess.IV+cs.CV+cs.MM+cs.LG+cs.CL+eess.AS+cs.NI`，覆盖通信、视觉、多媒体、语言、语音和学习等领域。
 先用 RSS 标题和摘要过滤，再请求目标论文元数据，避免对整个视觉/学习分类逐篇调用 API。
@@ -40,9 +50,9 @@ GitHub Actions Secrets 中；本地 `.env` 不会提交。
 - `Actions → Test - Daily Paper Sender`：按通信主题检索最近 5 篇候选论文，执行相同的领域与分数筛选，
   默认只生成预览；在运行结果的 `radar-preview` 中下载 HTML 和 JSON。勾选 `send_email` 才发送测试邮件。
 - `Actions → Deployment Check`：验证 Linux 依赖、回归检查和论文源连接，不发送邮件。
-- `Settings → Secrets and variables → Actions → Variables`：修改研究兴趣
-  `RETRIEVER_TARGET`、主题检索式 `TOPIC_QUERY`、最低分 `MIN_SCORE`、邮件篇数 `MAX_PAPER_NUM`、
+- `Settings → Secrets and variables → Actions → Variables`：修改最低分 `MIN_SCORE`、邮件篇数 `MAX_PAPER_NUM`、
   摘要语言 `LANGUAGE` 和空结果通知 `SEND_EMPTY`。
+- 研究兴趣和主题检索式在 `src/relevance.py` 中维护，工作流使用该文件中的当前值。
 - `Settings → Secrets and variables → Actions → Secrets`：修改收件人
   `RECEIVER`、发件人 `SENDER`、SMTP 服务器 `SMTP_SERVER`、端口 `SMTP_PORT`
   及授权码 `SENDER_PASSWORD`。
@@ -66,4 +76,6 @@ GitHub Actions Secrets 中；本地 `.env` 不会提交。
 ```sh
 uv run --locked python -m unittest discover -s test -p test_deployment.py -v
 uv run --locked python -m unittest discover -s test -p test_daily_delivery.py -v
+uv run --locked python -m unittest discover -s test -p test_venue_filter.py -v
+uv run --locked python -m unittest discover -s test -p test_pending_publications.py -v
 ```

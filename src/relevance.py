@@ -1,15 +1,16 @@
-"""Select semantic communication methods independently of application scenario."""
+"""Select literature relevant to spatially assisted visual JSCC."""
 import re
 
 
 DEFAULT_ARXIV_QUERY = 'cs.IT+eess.SP+eess.IV+cs.CV+cs.MM+cs.LG+cs.CL+eess.AS+cs.NI'
 
 DEFAULT_INTERESTS = '\n'.join((
-    'Semantic communication and deep joint source-channel coding methods in any modality and application; FAJSCC and MambaJSCC as references',
-    'Task-oriented semantic coding, feature selection, generative and multimodal semantic transmission for reconstruction or receiver inference',
-    'ResiComp-style loss-resilient learned source/latent coding, masked tokens and packet-loss concealment for communication',
-    'Low-complexity, compute-adaptive, variable-rate and SNR/CSI-adaptive semantic communication and DeepJSCC',
-    'Applications of semantic communication and DeepJSCC to underwater acoustic, optical, hybrid acoustic-optical and other communication channels',
+    'Image and video DeepJSCC and semantic transmission for reconstruction; SwinJSCC, FAJSCC and MambaJSCC',
+    'Explicit spatial or geometric priors for visual communication: 2D distances, positions, spatial relations, relative monocular depth and depth-aware attention',
+    'Spatial structure, edges, topology, regions of interest and feature importance for robust image reconstruction in semantic communication',
+    'SNR or CSI adaptive and bandwidth-adaptive JSCC with geometry, attention, Transformers or visual state-space models',
+    'ResiComp-style loss-resilient learned image or video coding, masked tokens and packet-loss concealment for communication',
+    'Spatial or geometry-aware visual representation and attention methods transferable to image communication and reconstruction',
 ))
 
 DEFAULT_TOPIC_QUERY = ' OR '.join(f'"{phrase}"' for phrase in (
@@ -17,10 +18,29 @@ DEFAULT_TOPIC_QUERY = ' OR '.join(f'"{phrase}"' for phrase in (
     'joint source-channel coding', 'joint source channel coding',
     'deep source channel coding', 'semantic communication', 'semantic communications',
     'semantic transmission', 'semantic coding', 'semantic autoencoder', 'SemCom',
-    'token communication',
+    'token communication', 'spatial prior', 'geometry attention', 'depth-aware attention',
 )) + ' OR ((neural OR learned OR learning) AND (compression OR codec) AND (' + ' OR '.join(
     f'"{phrase}"' for phrase in ('packet loss', 'loss-resilient', 'erasure-resilient', 'loss concealment')
 ) + '))'
+
+
+def is_thesis_relevant(paper):
+    """Keep visual communication and specific transferable geometry methods."""
+    text = re.sub(r'[-\u2010-\u2015_/]+', ' ', f'{paper.title}\n{paper.summary}'.casefold())
+    if re.search(r'\b(?:swinjscc|mambajscc|fajscc|resicomp)\b', text):
+        return True
+    visual = re.search(r'\b(?:images?|visual|vision|video|rgbd|rgb d)\b', text)
+    if not visual:
+        return False
+    if is_target_communication(paper):
+        return True
+    explicit_geometry = re.search(
+        r'\b(?:geometry|geometric|depth|spatial)\s+(?:aware\s+)?(?:self\s+)?attention\b|'
+        r'\b(?:monocular|relative|estimated)\s+depth\b|\bdepth\s+(?:maps?|guided|aware)\b|'
+        r'\b(?:rgbd|rgb d)\b|\b(?:euclidean|2d|2 d|spatial|geometric)\s+(?:distance|distances)\b|'
+        r'\bgeometry\s+(?:prior|priors|guided)\b', text)
+    mechanism = re.search(r'\b(?:attention|transformers?|representation|positional encoding|relative position)\b', text)
+    return bool(explicit_geometry and mechanism)
 
 
 def is_target_communication(paper):

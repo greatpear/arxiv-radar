@@ -61,6 +61,8 @@ jobs:
         run: |
           uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
           uv run --frozen python -m unittest discover -s test -p test_daily_delivery.py -v
+          uv run --frozen python -m unittest discover -s test -p test_venue_filter.py -v
+          uv run --frozen python -m unittest discover -s test -p test_pending_publications.py -v
 
       - name: Cache local language models
         uses: actions/cache@v4
@@ -71,7 +73,6 @@ jobs:
       - name: Run Script
         env:
           SEND_EMPTY: ${{ vars.SEND_EMPTY }}
-          RETRIEVER_TARGET: ${{ vars.RETRIEVER_TARGET }}
           ARXIV_QUERY: ${{ secrets.ARXIV_QUERY }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -80,7 +81,6 @@ jobs:
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           MAX_PAPER_NUM: ${{ vars.MAX_PAPER_NUM }}
           MIN_SCORE: ${{ vars.MIN_SCORE }}
-          TOPIC_QUERY: ${{ vars.TOPIC_QUERY }}
           USE_LLM_API: ${{ secrets.USE_LLM_API }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}

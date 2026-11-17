@@ -8,7 +8,7 @@ from loguru import logger
 
 from .llm import set_global_llm
 from .paper import ArxivPaper
-from .relevance import is_target_communication
+from .relevance import is_target_communication, is_thesis_relevant
 
 
 def rerank_paper(papers: List[ArxivPaper], retriever_target: str,
@@ -19,8 +19,8 @@ def rerank_paper(papers: List[ArxivPaper], retriever_target: str,
     if not 0 < min_score <= 100:
         raise ValueError('min_score must be greater than zero and at most 100')
     interests = [item.strip() for item in (retriever_target or '').splitlines() if item.strip()]
-    candidates = [paper for paper in papers if is_target_communication(paper)]
-    logger.info(f'Communication topic filter: {len(candidates)}/{len(papers)} candidates')
+    candidates = [paper for paper in papers if is_thesis_relevant(paper)]
+    logger.info(f'Thesis topic filter: {len(candidates)}/{len(papers)} candidates')
     if not candidates or not interests:
         return []
     set_global_llm(model=model, model_path=model_url)
@@ -38,7 +38,7 @@ def rerank_paper(papers: List[ArxivPaper], retriever_target: str,
             paper.score = 0.0
             logger.error(f'Could not score {paper.arxiv_id}: {error}')
         time.sleep(0.5)
-    accepted.sort(key=lambda paper: paper.score, reverse=True)
+    accepted.sort(key=lambda paper: (not bool(is_target_communication(paper)), -paper.score))
     logger.info(f'Relevance threshold {min_score}: {len(accepted)}/{len(candidates)} papers retained')
     return accepted
 
@@ -59,34 +59,28 @@ def calculate_paper_score(paper: ArxivPaper, interests: List[str]) -> float:
     zero_example = {key: 0 for key in topics}
     relevant_example = dict(zero_example)
     relevant_example['T1'] = 94
-    prompt = f'''Evaluate this paper for an INFORMATION AND COMMUNICATION ENGINEERING researcher
-focused on SEMANTIC COMMUNICATION AS A METHOD, WITH APPLICATION SCENARIOS UNRESTRICTED.
-The user's exemplars are ResiComp (loss-resilient learned image compression),
-FAJSCC (compute-efficient and adjustable image DeepJSCC), and MambaJSCC
-(state-space visual JSCC with channel adaptation).
-These are METHOD references, not restrictions to visual data or particular channels.
-The required criterion is proposing, improving, or applying semantic communication,
-deep JSCC, or closely related ResiComp-style loss-resilient learned communication coding.
-Any modality can qualify: images, video, speech, text, sensor measurements, or multimodal data.
-Any scenario can qualify: underwater acoustic, optical, hybrid acoustic-optical,
-terrestrial wireless, satellite, edge/cloud, or other communication environments.
-Underwater is an application interest, NOT a prerequisite.
-Task-oriented feature selection and coding for receiver classification/inference
-are relevant methods, even when image reconstruction is not their objective.
+    prompt = f'''Evaluate this paper for a master's researcher studying IMAGE JSCC AND RECONSTRUCTION.
+Prioritize explicit spatial/2D position or relative monocular depth priors, geometric or
+spatial attention, structure preservation and channel/SNR-adaptive visual JSCC.
+Relevant baselines include SwinJSCC, FAJSCC, MambaJSCC and ResiComp-style packet-loss
+resilient learned visual coding. Visual geometry/attention papers without communication
+may qualify as auxiliary methods if their mechanism could transfer to image reconstruction.
+Underwater acoustic, optical and mixed channels are optional application settings.
+Speech-only, text-only and unrelated communication/networking papers should score below 70.
+Do not treat network depth or antenna spatial dimensions as image depth/geometry.
 Topics (IDs must stay unchanged): {json.dumps(topics)}
 
 Score each topic from 0 to 100 based on the main technical contribution:
 90-100: directly solves a problem in that communication topic.
-70-89: substantial contribution to its coding, modulation, channel, receiver, or communication network.
+70-89: substantial contribution to visual communication or transferable visual geometry methods.
 1-69: peripheral connection or a passing mention; not suitable for recommendation.
 0: unrelated.
-Optical materials, photon emitters, quantum gauge fields, boson sampling, imaging,
+Optical materials, photon emitters, quantum gauge fields, boson sampling,
 and generic information-bottleneck theory must score 0 unless the paper evaluates
 an actual data-bearing communication system in one of the listed topics.
 The word "optical", "acoustic", "semantic" or "information" alone does not establish relevance.
 Ordinary optical links, ISAC sensing, underwater equalization/channel estimation,
-and unrelated uses of Mamba/Transformers must score 0 unless semantic communication
-or learned communication coding is a substantive part of the contribution.
+and unrelated uses of Mamba/Transformers must score 0.
 Do not give a paper a high score solely for its physical carrier, environment,
 or for citing the exemplars. Evaluate the actual communication method.
 

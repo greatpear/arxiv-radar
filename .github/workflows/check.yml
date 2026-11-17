@@ -32,6 +32,8 @@ jobs:
         run: |
           uv run --frozen python -m unittest discover -s test -p test_deployment.py -v
           uv run --frozen python -m unittest discover -s test -p test_daily_delivery.py -v
+          uv run --frozen python -m unittest discover -s test -p test_venue_filter.py -v
+          uv run --frozen python -m unittest discover -s test -p test_pending_publications.py -v
       - name: Check command and configured arXiv feed
         run: |
           uv run --frozen main.py --help

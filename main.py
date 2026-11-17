@@ -4,6 +4,7 @@ import os
 import feedparser
 import sys
 import json
+import re
 from pathlib import Path
 from tqdm import tqdm
 from src.paper import ArxivPaper
@@ -11,7 +12,10 @@ from src.rerank import rerank_paper
 from src.llm import destroy_global_llm, set_global_llm
 from src.construct_email import render_email, send_email
 from loguru import logger
-from src.relevance import DEFAULT_TOPIC_QUERY, is_target_communication
+from src.relevance import DEFAULT_TOPIC_QUERY, DEFAULT_INTERESTS, is_thesis_relevant
+from src.publication import find_publication
+from src.daily_delivery import beijing_now, load_recommended_ids
+from src.pending_publications import active_pending, load_pending_publications, select_due, update_pending
 
 # 配置日志
 logger.remove()  # 移除默认的日志配置
@@ -24,10 +28,19 @@ def get_arxiv_paper(query: str, debug: bool = False, topic_query: str = None) ->
         raise Exception(f"Invalid ARXIV_QUERY: {query}.")
     if not debug:
         papers = []
-        new_entries = [item for item in feed.entries if item.arxiv_announce_type == 'new']
-        all_paper_ids = [item.id.removeprefix("oai:arXiv.org:") for item in new_entries
-                         if is_target_communication(item)]
-        logger.info(f'New RSS entries: {len(new_entries)}; method-matched candidates: {len(all_paper_ids)}')
+        entries = [item for item in feed.entries if item.arxiv_announce_type in ('new', 'replace')]
+        already_sent = load_recommended_ids()
+        selected = {}
+        for item in entries:
+            versioned_id = item.id.removeprefix('oai:arXiv.org:')
+            stable_id = re.sub(r'v\d+$', '', versioned_id)
+            if stable_id not in already_sent and is_thesis_relevant(item):
+                selected[stable_id] = versioned_id
+        pending = active_pending(load_pending_publications(), already_sent, beijing_now().date())
+        for stable_id in select_due(pending, beijing_now().date()):
+            selected.setdefault(stable_id, stable_id)
+        all_paper_ids = list(selected.values())
+        logger.info(f'New/revised RSS entries: {len(entries)}; candidates including pending rechecks: {len(all_paper_ids)}')
         bar = tqdm(total=len(all_paper_ids), desc="Retrieving Arxiv papers")
         for i in range(0, len(all_paper_ids),20):
             search = arxiv.Search(id_list=all_paper_ids[i:i+20])
@@ -58,12 +71,20 @@ def run_radar(args):
         raise ValueError('MIN_SCORE must be greater than zero and at most 100')
     if args.max_paper_num != -1 and args.max_paper_num < 1:
         raise ValueError('MAX_PAPER_NUM must be positive or -1')
-    logger.info('Retrieving communication papers...')
+    logger.info('Retrieving thesis-related papers...')
     candidates = get_arxiv_paper(args.arxiv_query, args.debug, args.topic_query)
+    verified = []
+    for candidate in candidates:
+        candidate.publication = find_publication(candidate)
+        if candidate.publication is not None:
+            verified.append(candidate)
+    logger.info(f'Publication/venue filter: {len(verified)}/{len(candidates)} candidates')
     papers = []
-    if candidates:
-        papers = rerank_paper(candidates, args.retriever_target, min_score=args.min_score)
+    deferred_ids = set()
+    if verified:
+        papers = rerank_paper(verified, args.retriever_target, min_score=args.min_score)
         if args.max_paper_num != -1:
+            deferred_ids = {paper.arxiv_id for paper in papers[args.max_paper_num:]}
             papers = papers[:args.max_paper_num]
     destroy_global_llm()
     interests = [item.strip() for item in args.retriever_target.splitlines() if item.strip()]
@@ -79,16 +100,23 @@ def run_radar(args):
     finally:
         destroy_global_llm()
     report = {
-        'candidate_count': len(candidates), 'minimum_score': args.min_score,
+        'candidate_count': len(candidates), 'verified_publication_count': len(verified), 'minimum_score': args.min_score,
         'papers': [{'arxiv_id': paper.arxiv_id, 'title': paper.title, 'score': paper.score,
                     'interest_scores': paper.interest_scores, 'tldr': paper.tldr,
-                    'pdf_url': paper.pdf_url} for paper in papers],
+                    'pdf_url': paper.pdf_url, 'publication': paper.publication} for paper in papers],
     }
+    if not args.debug:
+        report['pending_publications'] = update_pending(
+            load_pending_publications(), candidates, load_recommended_ids(),
+            beijing_now().date(), deferred_ids)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding='utf-8')
     output.with_suffix('.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    logger.info('RADAR_SELECTION=' + json.dumps(report, ensure_ascii=False))
+    summary = {key: value for key, value in report.items() if key != 'pending_publications'}
+    if 'pending_publications' in report:
+        summary['pending_publication_count'] = len(report['pending_publications'])
+    logger.info('RADAR_SELECTION=' + json.dumps(summary, ensure_ascii=False))
     if args.dry_run:
         logger.info(f'Preview saved to {output}; no email sent')
     elif papers or args.send_empty:
@@ -135,7 +163,7 @@ if __name__ == '__main__':
     add_argument(
         "--retriever_target",
         type=str,
-        help="Retriever target domain, such as 'agent' or 'software test'"
+        help="Retriever target domain, one topic per line", default=DEFAULT_INTERESTS,
     )
     add_argument(
         "--use_llm_api",

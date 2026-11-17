@@ -94,9 +94,31 @@ class RecommendationTests(unittest.TestCase):
         papers = [sample_paper(title, abstract, score=95) for title, abstract in IRRELEVANT_PAPERS]
         self.assertEqual(self.rank_without_loading_models(papers), [])
 
-    def test_requested_communication_topics_survive_the_domain_filter(self):
+    def test_visual_communication_topics_survive_the_thesis_filter(self):
         papers = [sample_paper(title, abstract, score=91) for title, abstract in COMMUNICATION_PAPERS]
-        self.assertEqual(self.rank_without_loading_models(papers), papers)
+        self.assertEqual(self.rank_without_loading_models(papers), papers[:7])
+
+    def test_transferable_geometry_is_kept_without_accepting_generic_vision(self):
+        geometry = sample_paper('Geometry Self-Attention for RGBD Semantic Segmentation',
+                                'A spatial depth-aware attention mechanism for visual representation.', score=91)
+        generic = sample_paper(*IRRELEVANT_PAPERS[8], score=91)
+        self.assertEqual(self.rank_without_loading_models([geometry, generic]), [geometry])
+
+    def test_auxiliary_filter_rejects_network_depth_and_unrelated_3d_tasks(self):
+        from src.relevance import is_thesis_relevant
+        unrelated = [
+            sample_paper('Deeper Vision Transformers for Image Classification',
+                         'We increase network depth and study attention layers.'),
+            sample_paper('3D Cell Morphology Clinical Image Classification',
+                         'A Swin Transformer classifies 3D cell morphology using spatial features.'),
+        ]
+        self.assertFalse(any(is_thesis_relevant(p) for p in unrelated))
+
+    def test_direct_visual_jscc_ranks_before_auxiliary_geometry(self):
+        direct = sample_paper(*COMMUNICATION_PAPERS[0], score=80)
+        auxiliary = sample_paper('Geometry Self-Attention for RGBD Semantic Segmentation',
+                                 'A spatial depth-aware attention mechanism for visual representation.', score=95)
+        self.assertEqual(self.rank_without_loading_models([auxiliary, direct]), [direct, auxiliary])
 
     def test_threshold_is_applied_before_limiting_recommendations(self):
         papers = [sample_paper(*COMMUNICATION_PAPERS[0], score=score) for score in (0, 69, 70, 92)]
@@ -151,7 +173,7 @@ class DeliveryPipelineTests(unittest.TestCase):
             output = Path(folder) / 'preview.html'
             with patch('main.get_arxiv_paper', return_value=[paper]), patch(
                 'main.rerank_paper', return_value=[paper]
-            ), patch('main.set_global_llm'), patch('main.destroy_global_llm'), patch(
+            ), patch('main.find_publication', return_value={'name': 'verified journal'}), patch('main.set_global_llm'), patch('main.destroy_global_llm'), patch(
                 'main.render_email', return_value='<p>Semantic communication: 93</p>'
             ), patch('main.send_email') as send:
                 main.run_radar(self.arguments(output))
@@ -166,7 +188,7 @@ class DeliveryPipelineTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             with patch('main.get_arxiv_paper', return_value=[paper]), patch(
                 'main.rerank_paper', return_value=[]
-            ), patch('main.set_global_llm') as initialize, patch(
+            ), patch('main.find_publication', return_value={'name': 'verified journal'}), patch('main.set_global_llm') as initialize, patch(
                 'main.destroy_global_llm'
             ), patch('main.send_email') as send:
                 report = main.run_radar(self.arguments(Path(folder) / 'empty.html', dry_run=False))
@@ -202,6 +224,22 @@ class MailTransportTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_revision_can_be_discovered_but_already_sent_papers_are_skipped(self):
+        self.assertTrue(hasattr(main, 'load_recommended_ids'), 'Sent-paper deduplication is missing')
+        revision = SimpleNamespace(id='oai:arXiv.org:2502.10812v3', arxiv_announce_type='replace',
+            title=COMMUNICATION_PAPERS[3][0], summary=COMMUNICATION_PAPERS[3][1])
+        sent = SimpleNamespace(id='oai:arXiv.org:2308.09361v2', arxiv_announce_type='replace',
+            title=COMMUNICATION_PAPERS[0][0], summary=COMMUNICATION_PAPERS[0][1])
+        client = MagicMock()
+        client.results.return_value = iter([revision])
+        feed = SimpleNamespace(feed=SimpleNamespace(title='arXiv feed'), entries=[sent, revision])
+        with patch('main.arxiv.Client', return_value=client), patch('main.feedparser.parse', return_value=feed), \
+             patch('main.load_recommended_ids', return_value={'2308.09361'}), \
+             patch('main.load_pending_publications', return_value={}):
+            papers = main.get_arxiv_paper('eess.IV+cs.IT')
+        self.assertEqual(client.results.call_args.args[0].id_list, ['2502.10812v3'])
+        self.assertEqual([p.title for p in papers], [revision.title])
+
     def test_daily_feed_filters_before_metadata_requests_and_keeps_resilient_visual_codecs(self):
         relevant = SimpleNamespace(
             id='oai:arXiv.org:2502.10812v1', arxiv_announce_type='new',
@@ -214,7 +252,9 @@ class RetrievalTests(unittest.TestCase):
         client = MagicMock()
         client.results.return_value = iter([relevant])
         feed = SimpleNamespace(feed=SimpleNamespace(title='arXiv feed'), entries=[unrelated, relevant])
-        with patch('main.arxiv.Client', return_value=client), patch('main.feedparser.parse', return_value=feed):
+        with patch('main.arxiv.Client', return_value=client), patch('main.feedparser.parse', return_value=feed), \
+             patch('main.load_recommended_ids', return_value=set()), \
+             patch('main.load_pending_publications', return_value={}):
             papers = main.get_arxiv_paper('eess.IV+cs.IT')
         self.assertEqual(client.results.call_args.args[0].id_list, ['2502.10812v1'])
         self.assertEqual([paper.title for paper in papers], [COMMUNICATION_PAPERS[3][0]])

@@ -6,9 +6,31 @@ import os
 from pathlib import Path
 import time
 
+from .pending_publications import DEFAULT_PENDING, write_pending_publications
+
 
 BEIJING = timezone(timedelta(hours=8), 'Asia/Shanghai')
 DEFAULT_RECEIPT = '.github/daily-delivery.json'
+DEFAULT_LEDGER = '.github/recommended-papers.json'
+
+
+def load_recommended_ids(ledger_path=DEFAULT_LEDGER):
+    path = Path(ledger_path)
+    if not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding='utf-8'))
+    ids = data['arxiv_ids']
+    if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+        raise ValueError('Recommended-paper ledger is invalid')
+    return set(ids)
+
+
+def write_recommended_ids(ledger_path, ids):
+    path = Path(ledger_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'arxiv_ids': sorted(ids)}, indent=2) + '\n', encoding='utf-8')
+    temporary.replace(path)
 
 
 def beijing_now():
@@ -38,7 +60,8 @@ def write_receipt(receipt_path, moment, status):
     temporary.replace(receipt_path)
 
 
-def deliver_digest(html_path, receipt_path, *, settings=None, clock=beijing_now,
+def deliver_digest(html_path, receipt_path, *, ledger_path=DEFAULT_LEDGER, pending_path=DEFAULT_PENDING,
+                   settings=None, clock=beijing_now,
                    sleeper=time.sleep, transport=None):
     if not needs_delivery(receipt_path, clock()):
         return False
@@ -46,8 +69,12 @@ def deliver_digest(html_path, receipt_path, *, settings=None, clock=beijing_now,
     html_path = Path(html_path)
     html = html_path.read_text(encoding='utf-8')
     report = json.loads(html_path.with_suffix('.json').read_text(encoding='utf-8'))
+    recommended_ids = load_recommended_ids(ledger_path)
     send_empty = settings.get('SEND_EMPTY', '').lower() in ('true', '1')
     if not report['papers'] and not send_empty:
+        write_recommended_ids(ledger_path, recommended_ids)
+        if 'pending_publications' in report:
+            write_pending_publications(pending_path, report['pending_publications'])
         write_receipt(receipt_path, clock(), 'empty_skipped')
         return False
     required = ('SENDER', 'RECEIVER', 'SENDER_PASSWORD', 'SMTP_SERVER')
@@ -65,6 +92,10 @@ def deliver_digest(html_path, receipt_path, *, settings=None, clock=beijing_now,
         transport = send_email
     transport(settings['SENDER'], settings['RECEIVER'], settings['SENDER_PASSWORD'],
               settings['SMTP_SERVER'], port, html)
+    recommended_ids.update(paper['arxiv_id'] for paper in report['papers'])
+    write_recommended_ids(ledger_path, recommended_ids)
+    if 'pending_publications' in report:
+        write_pending_publications(pending_path, report['pending_publications'])
     write_receipt(receipt_path, clock(), 'sent')
     return True
 
